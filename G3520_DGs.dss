@@ -1,0 +1,30 @@
+! ------------------------------------------------------------
+! Cat G3520 Natural Gas Synchronous Generator
+! 2050 kW, 2562 kVA, 12.47 kV
+! Based on uploaded Cat generator data report
+!
+! OpenDSS zero-sequence modeling approach:
+! X0 transformer = 0.0258 pu = 2.58%
+! Generator Xdp  = X'd - X0 = 0.2352 - 0.0258 = 0.2094 pu
+! Generator Xdpp = X2  - X0 = 0.2005 - 0.0258 = 0.1747 pu
+! ------------------------------------------------------------
+
+! 1:1 Yg-Delta transformer used to represent generator X0
+New Transformer.G3520_X0_253842 phases=3 windings=2 XHL=2.58
+
+~ wdg=1 bus=253842.1.2.3.0 conn=wye  kV=12.47 kVA=2562 %R=0
+~ wdg=2 bus=G3520_253842_INT.1.2.3 conn=delta kV=12.47 kVA=2562 %R=0
+
+! Synchronous generator behind the modeling transformer
+New Generator.G3520_253842 phases=3 bus1=G3520_253842_INT.1.2.3 conn=delta
+
+~ kV=12.47
+~ kW=2050
+~ kvar=0
+~ kVA=2562
+~ model=1
+~ status=fixed
+
+~ Xdp=0.2094
+~ Xdpp=0.1747
+~ XRdp=24.37
