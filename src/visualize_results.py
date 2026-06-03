@@ -21,9 +21,10 @@ from pathlib import Path
 # CONFIG
 # ---------------------------------------------------------------------------
 
-FEATURES_CSV = Path("results/real_slg_features.csv")
-DROPOUT_CSV  = Path("results/real_slg_dropout.csv")
-FIG_DIR      = Path("results/figures")
+_BASE         = Path(__file__).parent.parent
+FEATURES_CSV  = _BASE / "results" / "real_slg_features.csv"
+DROPOUT_CSV   = _BASE / "results" / "real_slg_dropout.csv"
+FIG_DIR       = _BASE / "results" / "figures"
 FIG_DIR.mkdir(parents=True, exist_ok=True)
 
 # Consistent style

@@ -1,0 +1,21 @@
+RFI_ID,Line,I1_normal_A,I2_normal_A,I3_normal_A,Max_normal_current_A,Pickup_threshold_A,Threshold_rule,Source_file
+RFI1,Line.215299,63.1294,71.9964,58.6004,71.9964,143.9928,2x max normal phase current,ckt7_Mon_rfi1_1.csv
+RFI2,Line.298366,59.3305,34.9693,55.3536,59.3305,118.661,2x max normal phase current,ckt7_Mon_rfi2_1.csv
+RFI3,Line.157115,121.992,91.3188,119.762,121.992,243.984,2x max normal phase current,ckt7_Mon_rfi3_1.csv
+RFI4,Line.157152,136.981,105.23,136.998,136.998,273.996,2x max normal phase current,ckt7_Mon_rfi4_1.csv
+RFI5,Line.157168,194.305,171.907,203.214,203.214,406.428,2x max normal phase current,ckt7_Mon_rfi5_1.csv
+RFI6,Line.175038,20.0758,18.922,17.5701,20.0758,40.1516,2x max normal phase current,ckt7_Mon_rfi6_1.csv
+RFI7,Line.255473,17.1309,17.1637,17.1092,17.1637,34.3274,2x max normal phase current,ckt7_Mon_rfi7_1.csv
+RFI8,Line.175060,48.1711,48.3209,48.0929,48.3209,96.6418,2x max normal phase current,ckt7_Mon_rfi8_1.csv
+RFI9,Line.175064,21.1032,26.3768,24.6808,26.3768,52.7536,2x max normal phase current,ckt7_Mon_rfi9_1.csv
+RFI10,Line.175085,17.2521,22.4326,20.7228,22.4326,44.8652,2x max normal phase current,ckt7_Mon_rfi10_1.csv
+RFI11,Line.175087,15.7422,20.8547,19.1047,20.8547,41.7094,2x max normal phase current,ckt7_Mon_rfi11_1.csv
+RFI12,Line.182907,11.5706,11.6901,14.3331,14.3331,28.6662,2x max normal phase current,ckt7_Mon_rfi12_1.csv
+RFI13,Line.182915,5.15927,5.21618,5.15813,5.21618,10.43236,2x max normal phase current,ckt7_Mon_rfi13_1.csv
+RFI14,Line.157127,13.8054,13.8188,13.8039,13.8188,27.6376,2x max normal phase current,ckt7_Mon_rfi14_1.csv
+RFI15,Line.318388,20.1965,20.2687,20.2909,20.2909,40.5818,2x max normal phase current,ckt7_Mon_rfi15_1.csv
+RFI16,Line.175042,17.1616,18.5007,17.1495,18.5007,37.0014,2x max normal phase current,ckt7_Mon_rfi16_1.csv
+RFI17,Line.262345,29.0862,31.957,26.4634,31.957,63.914,2x max normal phase current,ckt7_Mon_rfi17_1.csv
+RFI18,Line.174952,23.9342,26.7975,21.2712,26.7975,53.595,2x max normal phase current,ckt7_Mon_rfi18_1.csv
+RFI19,Line.175054,57.1584,57.3176,57.1203,57.3176,114.6352,2x max normal phase current,ckt7_Mon_rfi19_1.csv
+RFI20,Line.255389,7.66024e-08,7.69097e-08,7.58002e-08,7.69097e-08,25.0,Manual 25 A,ckt7_Mon_rfi20_1.csv

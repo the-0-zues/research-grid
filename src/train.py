@@ -22,7 +22,7 @@ from sklearn.pipeline import Pipeline
 # Import our preprocessor
 import sys
 sys.path.append(str(Path(__file__).parent))
-from Preprocess import generate_synthetic_data
+
 
 
 # ---------------------------------------------------------------------------
@@ -30,7 +30,9 @@ from Preprocess import generate_synthetic_data
 # ---------------------------------------------------------------------------
 
 RESULTS_DIR = Path(__file__).parent.parent / "results"
+MODELS_DIR  = RESULTS_DIR / "models"
 RESULTS_DIR.mkdir(exist_ok=True)
+MODELS_DIR.mkdir(exist_ok=True)
 
 RANDOM_STATE = 42
 TEST_SIZE    = 0.20   # 80/20 train-test split (per paper proposal)
@@ -41,27 +43,24 @@ N_FOLDS      = 5      # 5-fold cross-validation
 # Load data
 # ---------------------------------------------------------------------------
 
-def load_data(csv_path: str = None):
-    """
-    Load the feature matrix. Uses synthetic data if no CSV path given.
-    When Olt's data is ready, pass the path to the real CSV instead.
-    """
-    if csv_path and Path(csv_path).exists():
-        print(f"Loading real data from {csv_path}")
-        df = pd.read_csv(csv_path)
-    else:
-        print("No data CSV found — using synthetic data for development.")
-        df = generate_synthetic_data(n_per_class=50)
+def load_data():
+      base = Path(__file__).parent.parent / "data" / "rfi_simulation"
+      df0 = pd.read_csv(base / "der000" / "ckt7_alert_log_der000.csv")
+      df5 = pd.read_csv(base / "der050" / "ckt7_alert_log_der050.csv")
+      df = pd.concat([df0, df5], ignore_index=True)
 
-    feature_cols = [c for c in df.columns
-                    if c not in ("label", "fault_type", "der_level")]
-
-    X = df[feature_cols].values
-    y = df["label"].values          # fault zone labels (zone1, zone2, zone3)
-
-    print(f"  X shape: {X.shape}")
-    print(f"  Classes: {np.unique(y)}")
-    return X, y, feature_cols
+      df = df.rename(columns={"rfi_id": "label"})
+   
+      drop_cols = ["fault_bus", "fault_type", "fault_R_ohm",
+                   "monitor_bus", "der_pct", "label"]
+      feature_cols = [c for c in df.columns if c not in drop_cols]
+      
+      X = df[feature_cols].values
+      y = df["label"].astype(str).values
+      
+      print(f"  X shape: {X.shape}")
+      print(f"  Classes: {np.unique(y)}")
+      return X, y, feature_cols
 
 
 # ---------------------------------------------------------------------------
@@ -156,7 +155,7 @@ def train_svm(X_train, y_train):
 # ---------------------------------------------------------------------------
 
 def save_model(model, name: str):
-    path = RESULTS_DIR / f"{name}.pkl"
+    path = MODELS_DIR / f"{name}.pkl"
     with open(path, "wb") as f:
         pickle.dump(model, f)
     print(f"  Saved to {path}")
@@ -168,9 +167,7 @@ def save_model(model, name: str):
 
 if __name__ == "__main__":
     # Load data
-    X, y, feature_cols = load_data(
-        csv_path=str(RESULTS_DIR / "synthetic_features.csv")
-    )
+    X, y, feature_cols = load_data()
 
     # Train/test split — stratified so class balance is preserved
     X_train, X_test, y_train, y_test = train_test_split(
@@ -189,8 +186,8 @@ if __name__ == "__main__":
     save_model(svm_model, "svm_model")
 
     # Also save the test set so evaluate.py can load it
-    np.save(RESULTS_DIR / "X_test.npy", X_test)
-    np.save(RESULTS_DIR / "y_test.npy", y_test)
+    np.save(MODELS_DIR / "X_test.npy", X_test)
+    np.save(MODELS_DIR / "y_test.npy", y_test)
     print("Saved test set.")
 
     print("\nDone. Run evaluate.py next.")

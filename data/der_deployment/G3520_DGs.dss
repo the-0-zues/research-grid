@@ -1,0 +1,115 @@
+! =====================================================================
+! Cat 3520 Natural Gas Synchronous DG Deployment
+! Generator Arrangement: 1586422
+! Rating: 1600 kW, 2000 kVA, 480 V, 60 Hz
+!
+! Four DG locations:
+! 253842, 165476, 165448, 283954
+!
+! Generator parameters from Cat datasheet:
+! X'd  = 0.2500 pu
+! X2   = 0.1571 pu
+! X0   = 0.0538 pu
+!
+! OpenDSS modeling approach:
+! - Utility side of transformer: 12.47 kV grounded wye
+! - Generator side: 0.48 kV delta
+! - X0 is folded into the transformer impedance
+!
+! Interconnection transformer assumption:
+! - Base transformer leakage assumed = 5.75%
+! - Combined XHL = 5.75% + 5.38% = 11.13%
+!
+! Generator properties after removing X0:
+! - Xdp  = 0.1962 pu
+! - Xdpp = 0.1033 pu
+! - XRdp ≈ 11.90
+! =====================================================================
+
+
+! ---------------------------------------------------------------------
+! DG 1 at Bus 253842
+! ---------------------------------------------------------------------
+
+New Transformer.T_DG_253842 phases=3 windings=2 XHL=11.13
+
+~ wdg=1 bus=253842.1.2.3.0 conn=wye   kV=12.47 kVA=2000 %R=0
+~ wdg=2 bus=DG_253842_LV.1.2.3 conn=delta kV=0.48  kVA=2000 %R=0
+
+New Generator.G_DG_253842 phases=3 bus1=DG_253842_LV.1.2.3 conn=delta
+
+~ kV=0.48
+~ kW=1600
+~ kvar=0
+~ kVA=2000
+~ model=1
+~ status=fixed
+~ Xdp=0.1962
+~ Xdpp=0.1033
+~ XRdp=11.90
+
+
+! ---------------------------------------------------------------------
+! DG 2 at Bus 165476
+! ---------------------------------------------------------------------
+
+New Transformer.T_DG_165476 phases=3 windings=2 XHL=11.13
+
+~ wdg=1 bus=165476.1.2.3.0 conn=wye   kV=12.47 kVA=2000 %R=0
+~ wdg=2 bus=DG_165476_LV.1.2.3 conn=delta kV=0.48  kVA=2000 %R=0
+
+New Generator.G_DG_165476 phases=3 bus1=DG_165476_LV.1.2.3 conn=delta
+
+~ kV=0.48
+~ kW=1600
+~ kvar=0
+~ kVA=2000
+~ model=1
+~ status=fixed
+~ Xdp=0.1962
+~ Xdpp=0.1033
+~ XRdp=11.90
+
+
+! ---------------------------------------------------------------------
+! DG 3 at Bus 165448
+! ---------------------------------------------------------------------
+
+New Transformer.T_DG_165448 phases=3 windings=2 XHL=11.13
+
+~ wdg=1 bus=165448.1.2.3.0 conn=wye   kV=12.47 kVA=2000 %R=0
+~ wdg=2 bus=DG_165448_LV.1.2.3 conn=delta kV=0.48  kVA=2000 %R=0
+
+New Generator.G_DG_165448 phases=3 bus1=DG_165448_LV.1.2.3 conn=delta
+
+~ kV=0.48
+~ kW=1600
+~ kvar=0
+~ kVA=2000
+~ model=1
+~ status=fixed
+~ Xdp=0.1962
+~ Xdpp=0.1033
+~ XRdp=11.90
+
+
+! ---------------------------------------------------------------------
+! DG 4 at Bus 283954
+! ---------------------------------------------------------------------
+
+New Transformer.T_DG_283954 phases=3 windings=2 XHL=11.13
+
+~ wdg=1 bus=283954.1.2.3.0 conn=wye   kV=12.47 kVA=2000 %R=0
+~ wdg=2 bus=DG_283954_LV.1.2.3 conn=delta kV=0.48  kVA=2000 %R=0
+
+New Generator.G_DG_283954 phases=3 bus1=DG_283954_LV.1.2.3 conn=delta
+
+~ kV=0.48
+~ kW=1600
+~ kvar=0
+~ kVA=2000
+~ model=1
+~ status=fixed
+~ Xdp=0.1962
+~ Xdpp=0.1033
+~ XRdp=11.90

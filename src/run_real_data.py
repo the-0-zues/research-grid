@@ -6,9 +6,9 @@ Theodore Lodge | Manhattan University Jasper Summer Research Scholars
 Usage:
     python run_real_data.py
 
-Folder structure expected (relative to src/):
-    ../RFI readings/              ckt7_Mon_rfi1.csv ... rfi20.csv
-    ../RFI readings after fault/  ckt7_Mon_rfi1_1.csv ... rfi20_1.csv
+Folder structure expected:
+    data/rfi_baseline/pre_fault/   ckt7_Mon_rfi1.csv ... rfi20.csv
+    data/rfi_baseline/post_fault/  ckt7_Mon_rfi1_1.csv ... rfi20_1.csv
 """
 
 import numpy as np
@@ -19,9 +19,10 @@ from pathlib import Path
 # CONFIG
 # ---------------------------------------------------------------------------
 
-BASELINE_DIR = Path("../RFI readings")
-FAULTED_DIR  = Path("../RFI readings after fault")
-RESULTS_DIR  = Path("results")
+_BASE        = Path(__file__).parent.parent
+BASELINE_DIR = _BASE / "data" / "rfi_baseline" / "pre_fault"
+FAULTED_DIR  = _BASE / "data" / "rfi_baseline" / "post_fault"
+RESULTS_DIR  = _BASE / "results"
 RESULTS_DIR.mkdir(exist_ok=True)
 
 PU_THRESHOLD = 0.5   # smart meter dropout threshold
