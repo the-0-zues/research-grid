@@ -18,8 +18,8 @@ import json
 from collections import defaultdict, deque
 
 # ── Paths ──────────────────────────────────────────────────────────────────
-BASE_DIR    = r"C:\EPRI_Ckt7_DER_Project"
-MASTER      = r"C:\EPRI_Ckt7_DER_Project\02_Base_Allocated\Master_ckt7_allocated_base.dss"
+BASE_DIR    = os.path.dirname(os.path.abspath(__file__))
+MASTER      = os.path.join(BASE_DIR, "electricdss-code-r4133-trunk-Distrib-EPRITestCircuits-ckt7", "Master_ckt7_allocated_base.dss")
 OUT_DIR     = os.path.join(BASE_DIR, "Simulation_Results")
 CONFIG_FILE = os.path.join(BASE_DIR, "simulation_config.json")
 
@@ -200,7 +200,9 @@ def select_fault_locations(zone_lines, line_endpoints, mv_bus_set):
 
         for i, ln in enumerate(chosen):
             b1, b2 = line_endpoints[ln]
-            fault_type = ["SLG_A"] * 4 + ["LL_AB"] * 4 + ["3PH"] * 4
+            fault_type = ["SLG_B", "SLG_B", "SLG_C", "SLG_C",
+                          "LL_AB", "LL_BC", "LL_CA", "LL_AB",
+                          "3PH",   "3PH",   "3PH",   "3PH"]
             faults.append({
                 "zone": zone_idx + 1,       # 1-based
                 "fault_id": f"Z{zone_idx+1:02d}_F{i+1:02d}",
@@ -272,17 +274,26 @@ def dg_dss_commands(bus):
 # ═══════════════════════════════════════════════════════════════════════════
 
 def fault_dss_commands(fault):
-    """Return DSS New Fault command string for a fault dict."""
-    bus  = fault["bus"]
+    """Return DSS New Fault command string for a fault dict. All faults start disabled."""
+    bus   = fault["bus"]
     ftype = fault["fault_type"]
     fname = f"Fault_{fault['fault_id']}"
+    suffix = "Enabled=No"
 
     if ftype == "SLG_A":
-        return f"New Fault.{fname} bus1={bus}.1 phases=1 r=0.0001"
+        return f"New Fault.{fname} bus1={bus}.1   phases=1 r=0.0001 {suffix}"
+    elif ftype == "SLG_B":
+        return f"New Fault.{fname} bus1={bus}.2   phases=1 r=0.0001 {suffix}"
+    elif ftype == "SLG_C":
+        return f"New Fault.{fname} bus1={bus}.3   phases=1 r=0.0001 {suffix}"
     elif ftype == "LL_AB":
-        return f"New Fault.{fname} bus1={bus}.1.2 phases=2 r=0.0001"
+        return f"New Fault.{fname} bus1={bus}.1.2 phases=2 r=0.0001 {suffix}"
+    elif ftype == "LL_BC":
+        return f"New Fault.{fname} bus1={bus}.2.3 phases=2 r=0.0001 {suffix}"
+    elif ftype == "LL_CA":
+        return f"New Fault.{fname} bus1={bus}.3.1 phases=2 r=0.0001 {suffix}"
     else:  # 3PH
-        return f"New Fault.{fname} bus1={bus}.1.2.3 phases=3 r=0.0001"
+        return f"New Fault.{fname} bus1={bus}.1.2.3 phases=3 r=0.0001 {suffix}"
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -384,25 +395,27 @@ def run_one_fault(dg_buses, fault):
 
 def main():
     print("=" * 60)
-    print("EPRI Ckt7 DER + Fault Simulation")
+    print("EPRI Ckt7 DER + Fault Simulation  [1 compile, enable/disable loop]")
     print("=" * 60)
 
-    # ── Load circuit once to get topology info ──
-    print("\n[1] Loading base circuit...")
-    load_base_circuit()
+    # ── 1. One-time circuit setup ─────────────────────────────
+    print("\n[1] Loading base circuit (once)...")
+    dss.Basic.Start(0)
+    dss.Command(f"Compile [{MASTER}]")
+    dss.Command("Set Mode=Snapshot")
+    dss.Command("Solve")
+
     mv_buses   = get_3phase_mv_buses()
     mv_bus_set = set(mv_buses)
     print(f"    3-phase MV buses: {len(mv_buses)}")
 
-    # ── Build topology ──
     print("\n[2] Building MV adjacency and zone assignments...")
     adj, line_endpoints = build_mv_adjacency(mv_bus_set)
     line_zone, zone_lines = assign_lines_to_zones(adj, line_endpoints, mv_bus_set)
     for z in range(N_ZONES):
-        print(f"    Zone {z+1:2d}: {len(zone_lines.get(z,[]))} lines")
+        print(f"    Zone {z+1:2d}: {len(zone_lines.get(z, []))} lines")
 
-    # ── Select fixed fault locations ──
-    print("\n[3] Selecting fixed fault locations (seed={})...".format(SEED))
+    print("\n[3] Selecting fault locations (seed={})...".format(SEED))
     faults = select_fault_locations(zone_lines, line_endpoints, mv_bus_set)
     print(f"    Total faults: {len(faults)}")
     by_type = defaultdict(int)
@@ -411,14 +424,26 @@ def main():
     for ft, cnt in sorted(by_type.items()):
         print(f"      {ft}: {cnt}")
 
-    # ── Build DG scenarios ──
     print("\n[4] Building DG scenario sequence...")
     scenarios = build_dg_scenarios(mv_buses)
     for s in scenarios:
         print(f"    Scenario {s['scenario_id']:2d} ({s['label']}): "
               f"{len(s['all_buses'])} cumulative buses | new: {s['new_buses']}")
 
-    # ── Save config ──
+    # RFI monitors (once)
+    rfi_dss = os.path.join(
+        BASE_DIR,
+        "electricdss-code-r4133-trunk-Distrib-EPRITestCircuits-ckt7",
+        "RFI_Monitors.dss"
+    )
+    dss.Command(f"Redirect [{rfi_dss}]")
+
+    # Pre-define all 240 fault elements as disabled (once)
+    print("\n[5] Pre-defining fault elements (disabled)...")
+    for fault in faults:
+        dss.Command(fault_dss_commands(fault))
+
+    # ── 2. Save config ────────────────────────────────────────
     config = {
         "seed": SEED,
         "n_scenarios": N_SCENARIOS,
@@ -428,52 +453,57 @@ def main():
     }
     with open(CONFIG_FILE, "w") as f:
         json.dump(config, f, indent=2)
-    print(f"\n    Config saved -> {CONFIG_FILE}")
+    print(f"    Config saved -> {CONFIG_FILE}")
 
-    # ── Run simulations (resume-aware) ──
-    total_runs = len(scenarios) * len(faults)
-    print(f"\n[5] Running {len(scenarios)} scenarios x {len(faults)} faults = {total_runs} simulations...")
-
+    # ── 3. Resume check (scenario-level) ─────────────────────
     results_file = os.path.join(OUT_DIR, "all_results.csv")
     rfi_cols = [r for r, _ in RFI_LINES]
     fieldnames = (
         ["scenario_id", "scenario_label", "n_dg_buses",
-         "fault_id", "zone", "fault_type", "fault_line", "fault_bus",
-         "converged"]
+         "fault_id", "zone", "fault_type", "fault_line", "fault_bus", "converged"]
         + rfi_cols
     )
 
-    # ── Find already-completed runs ──
-    completed_keys = set()
-    write_header = True
+    completed_scenarios = set()
     if os.path.exists(results_file):
-        with open(results_file, "r", newline="") as existing:
-            reader = csv.DictReader(existing)
-            for row in reader:
-                completed_keys.add((row["scenario_label"], row["fault_id"]))
-        write_header = len(completed_keys) == 0
-        print(f"    Resuming: {len(completed_keys)} runs already done, skipping them.")
+        sc_counts = defaultdict(int)
+        with open(results_file, "r", newline="") as f:
+            for row in csv.DictReader(f):
+                sc_counts[row["scenario_label"]] += 1
+        completed_scenarios = {label for label, cnt in sc_counts.items()
+                                if cnt >= len(faults)}
+        if completed_scenarios:
+            print(f"    Resuming: {len(completed_scenarios)} full scenarios already done.")
 
-    completed = len(completed_keys)
-    file_mode = "a" if completed_keys else "w"
+    file_mode  = "a" if completed_scenarios else "w"
+    completed  = len(completed_scenarios) * len(faults)
+    total_runs = len(scenarios) * len(faults)
+    print(f"\n[6] Running {len(scenarios)} scenarios x {len(faults)} faults = {total_runs} simulations...")
 
+    # ── 4. Scenario × fault loop ──────────────────────────────
     with open(results_file, file_mode, newline="") as csvfile:
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-        if write_header:
+        if file_mode == "w":
             writer.writeheader()
 
         for scenario in scenarios:
-            scenario_dir = os.path.join(OUT_DIR, f"Scenario_{scenario['scenario_id']:02d}_{scenario['label']}")
-            os.makedirs(scenario_dir, exist_ok=True)
+            # Add only the NEW DGs for this scenario (cumulative; never removed)
+            for bus in scenario["new_buses"]:
+                for cmd in dg_dss_commands(bus):
+                    dss.Command(cmd)
 
-            scenario_results = []
+            if scenario["label"] in completed_scenarios:
+                continue  # DGs already added above; skip fault loop
+
+            scenario_rows = []
             for fault in faults:
-                key = (scenario["label"], fault["fault_id"])
-                if key in completed_keys:
-                    continue   # already done
+                fname = f"Fault_{fault['fault_id']}"
 
-                readings = run_one_fault(scenario["all_buses"], fault)
-                converged = readings is not None
+                dss.Command(f"Edit Fault.{fname} Enabled=Yes")
+                dss.Command("Set Mode=Snapshot")
+                dss.Command("Solve")
+                converged = dss.Solution.Converged()
+
                 row = {
                     "scenario_id":    scenario["scenario_id"],
                     "scenario_label": scenario["label"],
@@ -486,29 +516,31 @@ def main():
                     "converged":      converged,
                 }
                 if converged:
-                    row.update(readings)
+                    row.update({rfi: read_rfi_via_element(rfi, ln)
+                                for rfi, ln in RFI_LINES})
                 else:
                     row.update({r: "" for r in rfi_cols})
 
+                dss.Command(f"Edit Fault.{fname} Enabled=No")
                 writer.writerow(row)
-                csvfile.flush()   # flush after every row so crashes don't lose data
-                scenario_results.append(row)
+                csvfile.flush()
+                scenario_rows.append(row)
                 completed += 1
 
-                if completed % 50 == 0 or completed == total_runs:
+                if completed % 100 == 0 or completed == total_runs:
                     pct = 100 * completed / total_runs
                     print(f"    Progress: {completed}/{total_runs} ({pct:.1f}%)")
 
-            # Per-scenario CSV (append new rows)
-            sc_file = os.path.join(scenario_dir, f"results_{scenario['label']}.csv")
-            sc_mode = "a" if os.path.exists(sc_file) else "w"
-            with open(sc_file, sc_mode, newline="") as sf:
+            # Per-scenario CSV
+            sc_dir = os.path.join(OUT_DIR, f"Scenario_{scenario['scenario_id']:02d}_{scenario['label']}")
+            os.makedirs(sc_dir, exist_ok=True)
+            sc_file = os.path.join(sc_dir, f"results_{scenario['label']}.csv")
+            with open(sc_file, "w", newline="") as sf:
                 sw = csv.DictWriter(sf, fieldnames=fieldnames)
-                if sc_mode == "w":
-                    sw.writeheader()
-                sw.writerows(scenario_results)
+                sw.writeheader()
+                sw.writerows(scenario_rows)
 
-    print(f"\n[6] Done. Results -> {results_file}")
+    print(f"\n[7] Done. Results -> {results_file}")
     print(f"    Per-scenario CSVs -> {OUT_DIR}/Scenario_XX_*/")
 
 
