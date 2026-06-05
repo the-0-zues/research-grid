@@ -1,0 +1,21 @@
+# Data files (too large, not tracked)
+data/*.csv
+data/*.xlsx
+data/*.mat
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.ipynb_checkpoints/
+~/ml_env/
+
+# Jupyter
+.jupyter/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Results (optional — uncomment if you want to track figures)
+# results/

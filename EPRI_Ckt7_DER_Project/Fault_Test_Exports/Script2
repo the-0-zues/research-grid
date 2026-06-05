@@ -1,0 +1,58 @@
+
+Clear
+
+Redirect Loadshapes_ckt7.dss
+Redirect Substation_ckt7.dss
+Redirect LineCodes_ckt7.dss
+Redirect Lines_ckt7.dss
+Redirect Services_ckt7.dss
+Redirect Load_XFMR_ckt7.dss
+Redirect Loads_ckt7.dss
+Redirect Capacitors_ckt7.dss
+Redirect G3520_DGs.dss
+Redirect RFI_Monitors.dss
+Redirect Fault_Test.dss
+
+! Initial allocation factors for allocated loads
+redirect AllocationFactors.dss
+
+! Define an energy meter -- needed for plot profile and yearly simulations
+New Energymeter.25607 element=line.333 terminal=1 peakcurrent=[272.4, 243.4, 272.0]
+
+! Let OpenDSS assign the bus voltage bases for reports
+Set voltagebases = [115, 12.47, 0.480, 0.4157, 0.208, 0.12]
+Calcvoltagebases
+
+! Now that buses are defined, define coordinates
+Buscoords  Buscoords_ckt7.dss
+BatchEdit Load..* Vminpu=0.85
+
+Set Mode=Direct
+Solve
+
+Sample
+
+Set DataPath=C:\EPRI_Ckt7_DER_Project\Fault_Test_Exports
+
+Export Monitor RFI1
+Export Monitor RFI2
+Export Monitor RFI3
+Export Monitor RFI4
+Export Monitor RFI5
+Export Monitor RFI6
+Export Monitor RFI7
+Export Monitor RFI8
+Export Monitor RFI9
+Export Monitor RFI10
+Export Monitor RFI11
+Export Monitor RFI12
+Export Monitor RFI13
+Export Monitor RFI14
+Export Monitor RFI15
+Export Monitor RFI16
+Export Monitor RFI17
+Export Monitor RFI18
+Export Monitor RFI19
+Export Monitor RFI20
+
+Export Voltages 
