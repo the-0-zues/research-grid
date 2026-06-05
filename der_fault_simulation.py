@@ -20,19 +20,28 @@ import os
 import json
 from collections import defaultdict, deque
 
+# ── K-Run Configuration (change these per k-run) ──────────────────────────
+#   K_RUN     : run number (1, 2, 3, ...)
+#   DG_SEED   : controls which buses are selected for DG placement
+#   FAULT_SEED: controls which lines are selected as fault locations
+#   SLG_PHASE : 1=Phase A, 2=Phase B, 3=Phase C
+K_RUN      = 2
+DG_SEED    = 137      # k-run 1 used 42
+FAULT_SEED = 99       # k-run 1 used 42
+SLG_PHASE  = 2        # Phase B to ground (k-run 1 = Phase A)
+
+SEED = DG_SEED
+random.seed(SEED)
+
 # ── Paths ──────────────────────────────────────────────────────────────────
 BASE_DIR    = r"C:\EPRI_Ckt7_DER_Project"
 MASTER      = r"C:\EPRI_Ckt7_DER_Project\02_Base_Allocated\Master_ckt7_sim.dss"
 SM_CSV      = r"C:\EPRI_Ckt7_DER_Project\smart_meter_locations.csv"
 RFI_DSS     = r"C:\EPRI_Ckt7_DER_Project\electricdss-code-r4133-trunk-Distrib-EPRITestCircuits-ckt7\RFI_Monitors.dss"
-OUT_DIR     = os.path.join(BASE_DIR, "Simulation_Results")
-CONFIG_FILE = os.path.join(BASE_DIR, "simulation_config.json")
+OUT_DIR     = os.path.join(BASE_DIR, f"Simulation_Results_KRun{K_RUN}")
+CONFIG_FILE = os.path.join(BASE_DIR, f"simulation_config_krun{K_RUN}.json")
 
 os.makedirs(OUT_DIR, exist_ok=True)
-
-# ── Constants ──────────────────────────────────────────────────────────────
-SEED = 42
-random.seed(SEED)
 
 SCENARIO1_BUSES = ["253842", "165476", "165448", "283954"]
 BUSES_PER_STEP  = 4
@@ -133,8 +142,13 @@ def assign_lines_to_zones(adj, line_endpoints, mv_bus_set):
 
 
 def select_fault_locations(zone_lines, line_endpoints, mv_bus_set):
+    """Select random fault locations using FAULT_SEED and SLG_PHASE config."""
+    phase_label = {1: "A", 2: "B", 3: "C"}[SLG_PHASE]
+    slg_type    = f"SLG_{phase_label}"
+    fault_types = [slg_type] * 4 + ["LL_AB"] * 4 + ["3PH"] * 4
+
+    rng    = random.Random(FAULT_SEED)   # isolated RNG so DG seed is unaffected
     faults = []
-    fault_types = ["SLG_A"] * 4 + ["LL_AB"] * 4 + ["3PH"] * 4
     for zone_idx in range(N_ZONES):
         candidates = [
             ln for ln in zone_lines.get(zone_idx, [])
@@ -145,9 +159,9 @@ def select_fault_locations(zone_lines, line_endpoints, mv_bus_set):
         if not candidates:
             print(f"  WARNING: Zone {zone_idx+1} has no eligible lines")
             continue
-        chosen = (random.sample(candidates, FAULTS_PER_ZONE)
+        chosen = (rng.sample(candidates, FAULTS_PER_ZONE)
                   if len(candidates) >= FAULTS_PER_ZONE
-                  else random.choices(candidates, k=FAULTS_PER_ZONE))
+                  else rng.choices(candidates, k=FAULTS_PER_ZONE))
         for i, ln in enumerate(chosen):
             b1, _ = line_endpoints[ln]
             faults.append({
@@ -157,27 +171,31 @@ def select_fault_locations(zone_lines, line_endpoints, mv_bus_set):
                 "bus":        b1,
                 "fault_type": fault_types[i],
                 "fault_name": f"FLT_Z{zone_idx+1:02d}_F{i+1:02d}",
+                "k_run":      K_RUN,
             })
     return faults
 
 
 def build_dg_scenarios(all_mv_buses):
-    used      = set(b.upper() for b in SCENARIO1_BUSES)
-    pool      = [b for b in all_mv_buses if b not in used]
+    """
+    Build 25 DG scenarios using DG_SEED.
+    All buses drawn randomly — no fixed scenario 1 across k-runs.
+    """
+    pool = list(all_mv_buses)
+    random.seed(DG_SEED)
     random.shuffle(pool)
-    scenarios = []
-    cumulative = list(SCENARIO1_BUSES)
-    scenarios.append({
-        "scenario_id": 1, "label": "DG_2pct",
-        "new_buses": list(SCENARIO1_BUSES), "all_buses": list(cumulative),
-    })
-    for step in range(2, N_SCENARIOS + 1):
+    scenarios  = []
+    cumulative = []
+    for step in range(1, N_SCENARIOS + 1):
         new_buses  = pool[:BUSES_PER_STEP]
         pool       = pool[BUSES_PER_STEP:]
         cumulative = cumulative + new_buses
         scenarios.append({
-            "scenario_id": step, "label": f"DG_{step*2}pct",
-            "new_buses": new_buses, "all_buses": list(cumulative),
+            "scenario_id": step,
+            "label":       f"DG_{step*2}pct",
+            "new_buses":   list(new_buses),
+            "all_buses":   list(cumulative),
+            "k_run":       K_RUN,
         })
     return scenarios
 
@@ -203,12 +221,12 @@ def define_fault_disabled(fault):
     name  = fault["fault_name"]
     bus   = fault["bus"]
     ftype = fault["fault_type"]
-    if ftype == "SLG_A":
-        dss.Command(f"New Fault.{name} bus1={bus}.1       phases=1 r=0.0001 enabled=false")
+    if ftype.startswith("SLG_"):
+        dss.Command(f"New Fault.{name} bus1={bus}.{SLG_PHASE}   phases=1 r=0.0001 enabled=false")
     elif ftype == "LL_AB":
-        dss.Command(f"New Fault.{name} bus1={bus}.1.2     phases=2 r=0.0001 enabled=false")
+        dss.Command(f"New Fault.{name} bus1={bus}.1.2           phases=2 r=0.0001 enabled=false")
     else:
-        dss.Command(f"New Fault.{name} bus1={bus}.1.2.3   phases=3 r=0.0001 enabled=false")
+        dss.Command(f"New Fault.{name} bus1={bus}.1.2.3         phases=3 r=0.0001 enabled=false")
 
 
 def enable_fault(fault_name):
@@ -286,7 +304,8 @@ def load_smart_meters():
 
 def main():
     print("=" * 60)
-    print("EPRI Ckt7 DER + Fault Simulation (Efficient)")
+    print(f"EPRI Ckt7 DER + Fault Simulation | K-Run {K_RUN}")
+    print(f"  DG seed: {DG_SEED} | Fault seed: {FAULT_SEED} | SLG Phase: {SLG_PHASE}")
     print("=" * 60)
 
     # ── 1. Compile circuit ONCE ──
@@ -344,7 +363,7 @@ def main():
     rfi_cols = [r for r, _ in RFI_LINES]
     sm_cols  = [sm[0] for sm in sm_list]   # SM_1 ... SM_867
     fieldnames = (
-        ["scenario_id", "scenario_label", "n_dg_buses",
+        ["k_run", "scenario_id", "scenario_label", "n_dg_buses",
          "fault_id", "zone", "fault_type", "fault_line", "fault_bus", "converged"]
         + rfi_cols + sm_cols
     )
@@ -393,6 +412,7 @@ def main():
                 converged = dss.Solution.Converged()
 
                 row = {
+                    "k_run":          K_RUN,
                     "scenario_id":    scenario["scenario_id"],
                     "scenario_label": sc_label,
                     "n_dg_buses":     len(scenario["all_buses"]),

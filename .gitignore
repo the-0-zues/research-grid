@@ -1,6 +1,7 @@
-# Large raw results files (too big for GitHub - use rfi_results.csv and summaries instead)
+# Large raw results files (too big for GitHub - use per-scenario CSVs instead)
 Simulation_Results/all_results.csv
 Simulation_Results/sm_results.csv
+Simulation_Results_KRun*/all_results.csv
 
 # Python cache
 __pycache__/
