@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(python \"C:\\\\EPRI_Ckt7_DER_Project\\\\der_fault_simulation.py\" 2>&1)"
+    ]
+  }
+}

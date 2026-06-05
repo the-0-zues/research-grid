@@ -1,0 +1,11 @@
+# Large raw results files (too big for GitHub - use rfi_results.csv and summaries instead)
+Simulation_Results/all_results.csv
+Simulation_Results/sm_results.csv
+
+# Python cache
+__pycache__/
+*.pyc
+
+# OpenDSS output files
+*.txt
+*.dwg
