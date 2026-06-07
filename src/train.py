@@ -11,6 +11,7 @@ Saves trained models to results/ for use in evaluate.py.
 import numpy as np
 import pandas as pd
 import pickle
+import glob
 from pathlib import Path
 
 from sklearn.ensemble import RandomForestClassifier
@@ -19,18 +20,14 @@ from sklearn.model_selection import train_test_split, GridSearchCV, StratifiedKF
 from sklearn.preprocessing import StandardScaler
 from sklearn.pipeline import Pipeline
 
-# Import our preprocessor
-import sys
-sys.path.append(str(Path(__file__).parent))
-
-
 
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
 
-RESULTS_DIR = Path(__file__).parent.parent / "results"
-MODELS_DIR  = RESULTS_DIR / "models"
+RESULTS_DIR  = Path(__file__).parent.parent / "results"
+MODELS_DIR   = RESULTS_DIR / "models"
+KRUN_GLOB    = str(Path(__file__).parent.parent / "Simulation_Results_KRun*" / "*" / "results_*.csv")
 RESULTS_DIR.mkdir(exist_ok=True)
 MODELS_DIR.mkdir(exist_ok=True)
 
@@ -38,29 +35,38 @@ RANDOM_STATE = 42
 TEST_SIZE    = 0.20   # 80/20 train-test split (per paper proposal)
 N_FOLDS      = 5      # 5-fold cross-validation
 
+# Feature sets used for training
+RFI_COLS = [f"RFI{i}" for i in range(1, 21)]
+# SM columns discovered dynamically after loading
+
 
 # ---------------------------------------------------------------------------
 # Load data
 # ---------------------------------------------------------------------------
 
 def load_data():
-      base = Path(__file__).parent.parent / "data" / "rfi_simulation"
-      df0 = pd.read_csv(base / "der000" / "ckt7_alert_log_der000.csv")
-      df5 = pd.read_csv(base / "der050" / "ckt7_alert_log_der050.csv")
-      df = pd.concat([df0, df5], ignore_index=True)
+    files = sorted(glob.glob(KRUN_GLOB))
+    if not files:
+        raise FileNotFoundError(f"No KRun result files found matching: {KRUN_GLOB}")
+    print(f"  Loading {len(files)} scenario files...")
 
-      df = df.rename(columns={"rfi_id": "label"})
-   
-      drop_cols = ["fault_bus", "fault_type", "fault_R_ohm",
-                   "monitor_bus", "der_pct", "label"]
-      feature_cols = [c for c in df.columns if c not in drop_cols]
-      
-      X = df[feature_cols].values
-      y = df["label"].astype(str).values
-      
-      print(f"  X shape: {X.shape}")
-      print(f"  Classes: {np.unique(y)}")
-      return X, y, feature_cols
+    df = pd.concat([pd.read_csv(f) for f in files], ignore_index=True)
+
+    # Drop the 22 non-converged rows
+    n_before = len(df)
+    df = df[df["converged"] == True].reset_index(drop=True)
+    print(f"  Dropped {n_before - len(df)} non-converged rows → {len(df)} samples")
+
+    sm_cols = [c for c in df.columns if c.startswith("SM_")]
+    feature_cols = RFI_COLS + sm_cols
+
+    X = df[feature_cols].values.astype(np.float32)
+    y = df["zone"].astype(str).values
+
+    print(f"  X shape: {X.shape}  ({len(RFI_COLS)} RFI + {len(sm_cols)} SM features)")
+    print(f"  Classes: {sorted(np.unique(y).tolist())}")
+    print(f"  Samples per class: {pd.Series(y).value_counts().sort_index().to_dict()}")
+    return X, y, feature_cols
 
 
 # ---------------------------------------------------------------------------
@@ -132,9 +138,10 @@ def train_svm(X_train, y_train):
                        decision_function_shape="ovr")),
     ])
 
+    # Tight grid: RBF kernel scales poorly with 48k samples; 3×2=6 combos keeps it tractable
     param_grid = {
-        "svm__C":     [0.1, 1, 10, 100],
-        "svm__gamma": ["scale", "auto", 0.01, 0.001],
+        "svm__C":     [1, 10, 100],
+        "svm__gamma": ["scale", 0.001],
     }
 
     cv = StratifiedKFold(n_splits=N_FOLDS, shuffle=True,

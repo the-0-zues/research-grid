@@ -213,10 +213,13 @@ def plot_accuracy_vs_der(rf_model, svm_model):
 # ---------------------------------------------------------------------------
 
 def _get_feature_cols():
-    base = Path(__file__).parent.parent / "data" / "rfi_simulation"
-    df = pd.read_csv(base / "der000" / "ckt7_alert_log_der000.csv", nrows=1)
-    drop = {"fault_bus", "fault_type", "fault_R_ohm", "monitor_bus", "der_pct", "rfi_id"}
-    return [c for c in df.columns if c not in drop]
+    import glob
+    krun_glob = str(Path(__file__).parent.parent / "Simulation_Results_KRun*" / "*" / "results_*.csv")
+    first_file = sorted(glob.glob(krun_glob))[0]
+    df = pd.read_csv(first_file, nrows=1)
+    rfi_cols = [c for c in df.columns if c.startswith("RFI")]
+    sm_cols  = [c for c in df.columns if c.startswith("SM_")]
+    return rfi_cols + sm_cols
 
 
 # ---------------------------------------------------------------------------
@@ -255,43 +258,10 @@ def plot_zone_accuracy_heatmap(rf_results: dict, svm_results: dict):
 # ---------------------------------------------------------------------------
 
 def plot_rfi_dropout_map():
-    base = Path(__file__).parent.parent / "data" / "rfi_simulation"
-    df = pd.concat([
-        pd.read_csv(base / "der000" / "ckt7_alert_log_der000.csv"),
-        pd.read_csv(base / "der050" / "ckt7_alert_log_der050.csv"),
-    ], ignore_index=True)
-
-    df["dropout"] = (df["Va_mag_pu"] < 0.5).astype(int)
-
-    # Encode fault_bus as an ordered zone index (sorted so zone ordering is consistent)
-    fault_buses = sorted(df["fault_bus"].unique())
-    bus_to_idx  = {b: i + 1 for i, b in enumerate(fault_buses)}
-    df["fault_zone_idx"] = df["fault_bus"].map(bus_to_idx)
-
-    pivot = (
-        df.groupby(["rfi_id", "fault_zone_idx"])["dropout"]
-        .mean()
-        .unstack(fill_value=0)
-    )
-    # Ensure full 20×20 grid
-    pivot = pivot.reindex(index=range(1, 21), columns=range(1, 21), fill_value=0)
-
-    fig, ax = plt.subplots(figsize=(14, 10))
-    sns.heatmap(
-        pivot, ax=ax,
-        cmap="YlOrRd", vmin=0, vmax=1,
-        annot=False, linewidths=0.3, linecolor="lightgray",
-        cbar_kws={"label": "Dropout Rate (Va < 0.5 pu)"},
-    )
-    ax.set_title("RFI Monitor Dropout Map\n(dark = monitor offline for that fault location)")
-    ax.set_xlabel("Fault Bus Zone Index (1 = nearest substation)")
-    ax.set_ylabel("RFI Monitor ID")
-    plt.tight_layout()
-
-    out_path = FIGURES_DIR /"rfi_dropout_map.png"
-    fig.savefig(out_path, dpi=150)
-    plt.close(fig)
-    print(f"  Saved RFI dropout map: {out_path}")
+    # This plot requires per-monitor voltage readings (Va_mag_pu) which live in the
+    # individual ckt7_Mon_rfi_*.csv files, not the aggregated KRun results.
+    # Skipped for now — revisit if per-monitor dropout analysis is needed.
+    print("  Skipped RFI dropout map (requires per-monitor Va_mag_pu columns)")
 
 
 # ---------------------------------------------------------------------------
@@ -398,40 +368,37 @@ def plot_misclassification_patterns(y_test, rf_pred, svm_pred):
 # ---------------------------------------------------------------------------
 
 def plot_rfi_feature_importance(rf_model):
-    feature_cols  = _get_feature_cols()
-    importances   = rf_model.feature_importances_
-    order         = np.argsort(importances)[::-1]
-    sorted_feats  = [feature_cols[i] for i in order]
-    sorted_imps   = importances[order]
-
-    # Color by signal type
-    def feat_color(name):
-        if "mag" in name and name.startswith("V"):  return "#2166ac"   # V magnitude
-        if "ang" in name and name.startswith("V"):  return "#74add1"   # V angle
-        if "mag" in name and name.startswith("I"):  return "#d73027"   # I magnitude
-        return "#f4a582"                                                # I angle
-
-    colors = [feat_color(f) for f in sorted_feats]
-
-    fig, ax = plt.subplots(figsize=(10, 6))
-    bars = ax.barh(sorted_feats[::-1], sorted_imps[::-1], color=colors[::-1])
-    ax.set_xlabel("Feature Importance (mean decrease in impurity)")
-    ax.set_title("Random Forest Feature Importance\n(physics check: current magnitude should dominate)")
-    ax.set_xlim(0, sorted_imps[0] * 1.15)
-
-    # Legend patches
     from matplotlib.patches import Patch
+
+    feature_cols = _get_feature_cols()
+    importances  = rf_model.feature_importances_
+    order        = np.argsort(importances)[::-1]
+
+    # Show top-40 features so the chart stays readable
+    top_n        = 40
+    top_feats    = [feature_cols[i] for i in order[:top_n]]
+    top_imps     = importances[order[:top_n]]
+
+    def feat_color(name):
+        if name.startswith("RFI"): return "#d73027"   # RFI line monitor
+        return "#2166ac"                               # SM voltage
+
+    colors = [feat_color(f) for f in top_feats]
+
+    fig, ax = plt.subplots(figsize=(10, 12))
+    ax.barh(top_feats[::-1], top_imps[::-1], color=colors[::-1])
+    ax.set_xlabel("Feature Importance (mean decrease in impurity)")
+    ax.set_title(f"Random Forest Feature Importance — Top {top_n}\n(physics check: RFI monitors should dominate)")
+    ax.set_xlim(0, top_imps[0] * 1.15)
     legend_items = [
-        Patch(color="#d73027", label="Current magnitude (Ia/Ib/Ic_mag_A)"),
-        Patch(color="#f4a582", label="Current angle (Ia/Ib/Ic_ang_deg)"),
-        Patch(color="#2166ac", label="Voltage magnitude (Va/Vb/Vc_mag_pu)"),
-        Patch(color="#74add1", label="Voltage angle (Va/Vb/Vc_ang_deg)"),
+        Patch(color="#d73027", label="RFI line monitor (current)"),
+        Patch(color="#2166ac", label="Smart meter voltage"),
     ]
     ax.legend(handles=legend_items, loc="lower right", fontsize=9)
     ax.grid(True, axis="x", linestyle="--", alpha=0.3)
     plt.tight_layout()
 
-    out_path = FIGURES_DIR /"rfi_feature_importance.png"
+    out_path = FIGURES_DIR / "rfi_feature_importance.png"
     fig.savefig(out_path, dpi=150)
     plt.close(fig)
     print(f"  Saved RFI feature importance: {out_path}")

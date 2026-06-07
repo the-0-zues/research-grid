@@ -1,3 +1,6 @@
+# Trained model files — too large for GitHub (regenerate with train.py / train_augmented.py)
+results/models/*.pkl
+
 # Large raw results files (too big for GitHub - use per-scenario CSVs instead)
 Simulation_Results/all_results.csv
 Simulation_Results/sm_results.csv
