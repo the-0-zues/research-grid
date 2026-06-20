@@ -98,7 +98,9 @@ def train_random_forest(X_train, y_train):
     cv = StratifiedKFold(n_splits=N_FOLDS, shuffle=True,
                          random_state=RANDOM_STATE)
 
-    rf = RandomForestClassifier(random_state=RANDOM_STATE, n_jobs=-1)
+    # n_jobs=1 here: GridSearchCV already parallelizes across folds/candidates
+    # with n_jobs=-1, so giving RF its own n_jobs=-1 would oversubscribe cores
+    rf = RandomForestClassifier(random_state=RANDOM_STATE, n_jobs=1)
 
     grid_search = GridSearchCV(rf, param_grid, cv=cv,
                                scoring="f1_weighted", n_jobs=-1, verbose=1)
