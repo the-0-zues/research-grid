@@ -23,13 +23,26 @@ Measurement noise (ANSI/IEEE standards, applied post-simulation):
   RFI: RSS of IEEE C57.13-2016 Class 0.6 CT (0.6%/3) and
        ANSI C12.1-2022 Class 0.5 meter (0.7%/3)  → σ ≈ 0.307% per reading
   SM:  ANSI C12.20 Class 0.5 (±0.5%)              → σ ≈ 0.167% per reading
-  SM dropout: 10 levels from 5% to 50% (models AMI last-gasp reporting failure)
+  SM dropout: 10% (models AMI last-gasp reporting failure)
+
+Load variation (LoadShapes):
+  Four time-of-day snapshots sampled randomly per fault:
+    overnight 0.20× | morning 0.50× | afternoon 0.75× | peak 1.00×
+  Load kW initialised from transformer kVA ratings (demand factor 0.80).
+  Adds realistic pre-fault current variation — same fault looks different
+  at midnight vs. evening peak.
+
+Capacitor switching:
+  Two voltage-controlled banks (CP-NR-613 1200 kvar, CP-85W-900 1200 kvar).
+  OpenDSS controlmode=static determines their ON/OFF state from the
+  pre-fault voltage at each load level before the fault is applied.
+  Caps are locked in that state during the fault solve (no millisecond
+  response — consistent with their 30–75 second switching delays).
+  Cap state recorded in output for analysis.
 
 Outputs:
   Realistic_Simulation/clean/results.csv
-  Realistic_Simulation/Degraded_Dropout_05pct/results.csv
-  ...
-  Realistic_Simulation/Degraded_Dropout_50pct/results.csv
+  Realistic_Simulation/Degraded_Dropout_10pct/results.csv
 """
 
 import opendssdirect as dss
@@ -48,11 +61,12 @@ DG_SEED    = 2025
 FAULT_SEED = 2025
 DG_COUNT   = 20      # 10% of 203 three-phase MV buses
 
-MASTER  = r"C:\EPRI_Ckt7_DER_Project\02_Base_Allocated\Master_ckt7_sim.dss"
-SM_CSV  = r"C:\EPRI_Ckt7_DER_Project\smart_meter_locations.csv"
-RFI_DSS = (r"C:\EPRI_Ckt7_DER_Project\electricdss-code-r4133-trunk-Distrib-"
-           r"EPRITestCircuits-ckt7\RFI_Monitors.dss")
-OUT_DIR = r"C:\EPRI_Ckt7_DER_Project\Realistic_Simulation"
+MASTER    = r"C:\EPRI_Ckt7_DER_Project\02_Base_Allocated\Master_ckt7_sim.dss"
+LOADS_DSS = r"C:\EPRI_Ckt7_DER_Project\02_Base_Allocated\Loads_ckt7.dss"
+SM_CSV    = r"C:\EPRI_Ckt7_DER_Project\smart_meter_locations.csv"
+RFI_DSS   = (r"C:\EPRI_Ckt7_DER_Project\electricdss-code-r4133-trunk-Distrib-"
+             r"EPRITestCircuits-ckt7\RFI_Monitors.dss")
+OUT_DIR   = r"C:\EPRI_Ckt7_DER_Project\Realistic_Simulation"
 
 # Fault impedances (IEEE PSRC WG D15 surface contact measurements at 7.2 kV L-N)
 R_WET_GRASS = 144.0    # 7200 V / 50 A
@@ -64,6 +78,21 @@ RFI_SIGMA = np.sqrt((0.006 / 3) ** 2 + (0.007 / 3) ** 2)  # ≈ 0.00307
 SM_SIGMA  = 0.005 / 3                                        # ≈ 0.001667
 
 DROPOUT_RATE = 0.10    # 10% smart meter dropout — models AMI last-gasp failure
+
+# Time-of-day load snapshots: (multiplier, label)
+# Multiplier scales all load kW from their peak (demand-factor-adjusted) values.
+LOAD_LEVELS = [
+    (0.20, "overnight"),    # 12am–5am  : very light load, voltage high, caps likely OFF
+    (0.50, "morning"),      # 6am–12pm  : moderate load
+    (0.75, "afternoon"),    # 12pm–5pm  : heavy load
+    (1.00, "peak"),         # 5pm–9pm   : peak demand, voltage lowest, caps likely ON
+]
+
+# Demand factor used to set peak kW from transformer kVA at initialisation
+DEMAND_FACTOR = 0.80
+
+# Voltage-controlled capacitor banks present in ckt7
+CAPACITOR_NAMES = ["CP-NR-613", "CP-85W-900"]
 
 MV_KV = 12470 / 1.7321 / 1000   # line-to-neutral kV for 12.47 kV system ≈ 7.199
 
@@ -84,7 +113,10 @@ DG_XHL   = 11.13; DG_XDP  = 0.1962; DG_XDPP = 0.1033; DG_XRDP = 11.90
 
 META_COLS = [
     "fault_id", "fault_type", "fault_bus", "zone",
-    "impedance_type", "r_ground", "r_phase", "converged"
+    "impedance_type", "r_ground", "r_phase",
+    "load_level", "time_of_day",
+    "cap_CP_NR_613", "cap_CP_85W_900",
+    "converged",
 ]
 
 
@@ -155,6 +187,61 @@ def build_bus_zone_map(adj, mv_bus_set):
                 queue.append((neighbor, next_zone))
 
     return bus_zone
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Load initialisation and capacitor state helpers
+# ═══════════════════════════════════════════════════════════════════════════
+
+def initialize_load_kw():
+    """
+    Replace the placeholder kW=0.0001 in every load with a realistic peak value
+    derived from its transformer kVA rating:
+        kW_peak = xfkVA × pf × DEMAND_FACTOR
+
+    After this call, 'set loadmult=X' scales all loads to X × peak simultaneously,
+    giving four distinct loading conditions without touching individual elements.
+    The yearly LoadShape reference is left in place but has no effect because
+    OpenDSS uses the global loadmult when no hourly DSS solve is active.
+    """
+    import re
+    count = 0
+    with open(LOADS_DSS) as f:
+        for line in f:
+            line = line.strip()
+            if not line.startswith("New Load."):
+                continue
+            m_name  = re.search(r"New Load\.(\S+)", line)
+            m_pf    = re.search(r"\bpf=([\d.]+)", line)
+            m_xfkva = re.search(r"xfkVA=([\d.]+)", line)
+            if not (m_name and m_xfkva):
+                continue
+            name   = m_name.group(1)
+            pf     = float(m_pf.group(1)) if m_pf else 0.9
+            xfkva  = float(m_xfkva.group(1))
+            kw_peak = xfkva * pf * DEMAND_FACTOR
+            dss.Command(f"Edit Load.{name} kW={kw_peak:.4f} status=variable")
+            count += 1
+    return count
+
+
+def get_cap_states():
+    """
+    Return the ON/OFF state of each capacitor bank after a base-case solve.
+    A bank is ON if current flows through it (switches closed).
+    Returns dict: cap_name -> bool (True = ON).
+    """
+    states = {}
+    for cap in CAPACITOR_NAMES:
+        try:
+            dss.Circuit.SetActiveElement(f"Capacitor.{cap}")
+            cmag    = dss.CktElement.CurrentsMagAng()
+            n       = dss.CktElement.NumPhases()
+            max_i   = max(cmag[2 * i] for i in range(n)) if n > 0 else 0.0
+            states[cap] = max_i > 0.5   # ON if more than 0.5 A flows
+        except Exception:
+            states[cap] = False
+    return states
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -480,49 +567,83 @@ def main():
     dss.Command("Solve")
     print(f"    DGs placed. Converged: {dss.Solution.Converged()}")
 
-    # ── 6. Load smart meter list ─────────────────────────────────────────
-    print("\n[6] Loading smart meter locations...")
+    # ── 6. Initialise load kW from transformer kVA ──────────────────────
+    print("\n[6] Initialising load kW values from transformer kVA...")
+    n_loads = initialize_load_kw()
+    print(f"    {n_loads} loads set to peak kW (demand factor {DEMAND_FACTOR})")
+
+    # ── 7. Load smart meter list ─────────────────────────────────────────
+    print("\n[7] Loading smart meter locations...")
     sm_list = load_smart_meters()
     print(f"    {len(sm_list)} smart meters loaded")
 
-    # ── 7. Initialise fault slots ────────────────────────────────────────
-    print("\n[7] Initialising reusable fault slots...")
+    # ── 8. Initialise fault slots ────────────────────────────────────────
+    print("\n[8] Initialising reusable fault slots...")
     init_fault_slots(mv_buses[0])
+    dss.Command("set controlmode=static")
+    dss.Command("set maxcontroler=100")
     dss.Command("Solve")
     print(f"    Base with DGs + monitors converged: {dss.Solution.Converged()}")
 
-    # ── 8. Simulation loop ───────────────────────────────────────────────
+    # ── 9. Simulation loop ───────────────────────────────────────────────
     rfi_cols   = [r for r, _ in RFI_LINES]
     sm_cols    = [sm[0] for sm in sm_list]
     fieldnames = META_COLS + rfi_cols + sm_cols
+    rng_load   = random.Random(FAULT_SEED + 1)   # separate RNG for load sampling
 
     clean_dir  = os.path.join(OUT_DIR, "clean")
     clean_path = os.path.join(clean_dir, "results.csv")
     os.makedirs(clean_dir, exist_ok=True)
 
-    print(f"\n[8] Running {len(faults)} fault simulations...")
-    rows         = []
-    n_converged  = 0
-    n_diverged   = 0
+    print(f"\n[9] Running {len(faults)} fault simulations...")
+    rows        = []
+    n_converged = 0
+    n_diverged  = 0
 
     with open(clean_path, "w", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
 
         for i, fault in enumerate(faults):
+
+            # ── Sample a time-of-day load level for this fault event ──────
+            load_mult, time_label = rng_load.choice(LOAD_LEVELS)
+
+            # ── Set load level and let capacitor controls reach steady state
+            # controlmode=static: OpenDSS iterates cap/reg controls until
+            # stable — determines whether each cap bank is ON or OFF at this
+            # load level before the fault occurs.
+            dss.Command(f"set loadmult={load_mult}")
+            dss.Command("set controlmode=static")
+            dss.Command("set maxcontroler=100")
+            dss.Command("Solve")
+
+            # ── Record cap states (locked in during fault solve) ──────────
+            cap_states = get_cap_states()
+
+            # ── Lock controls off — caps stay fixed during fault solve ─────
+            # Real caps cannot react in the milliseconds a fault lasts
+            # (their switching delays are 30–75 seconds).
+            dss.Command("set controlmode=off")
+
+            # ── Apply fault and solve ─────────────────────────────────────
             apply_fault(fault)
             dss.Command("Solve")
             converged = dss.Solution.Converged()
 
             row = {
-                "fault_id":       fault["fault_id"],
-                "fault_type":     fault["fault_type"],
-                "fault_bus":      fault["fault_bus"],
-                "zone":           fault["zone"],
-                "impedance_type": fault["impedance_type"],
-                "r_ground":       fault["r_ground"],
-                "r_phase":        fault["r_phase"],
-                "converged":      converged,
+                "fault_id":        fault["fault_id"],
+                "fault_type":      fault["fault_type"],
+                "fault_bus":       fault["fault_bus"],
+                "zone":            fault["zone"],
+                "impedance_type":  fault["impedance_type"],
+                "r_ground":        fault["r_ground"],
+                "r_phase":         fault["r_phase"],
+                "load_level":      load_mult,
+                "time_of_day":     time_label,
+                "cap_CP_NR_613":   cap_states.get("CP-NR-613", False),
+                "cap_CP_85W_900":  cap_states.get("CP-85W-900", False),
+                "converged":       converged,
             }
 
             if converged:
@@ -546,8 +667,8 @@ def main():
     print(f"\n    Clean data saved  →  {clean_path}")
     print(f"    Converged: {n_converged}  |  Diverged (excluded from noise step): {n_diverged}")
 
-    # ── 9. Generate degraded datasets ────────────────────────────────────
-    print("\n[9] Generating degraded datasets (ANSI noise + SM dropout)...")
+    # ── 10. Generate degraded dataset ────────────────────────────────────
+    print("\n[10] Generating degraded dataset (ANSI noise + 10% SM dropout)...")
     clean_df = pd.DataFrame(rows)
 
     pct_label = f"{int(round(DROPOUT_RATE * 100)):02d}pct"
@@ -560,7 +681,7 @@ def main():
     degraded.to_csv(out_path, index=False)
     print(f"    Dropout {pct_label}  →  {out_path}")
 
-    # ── 10. Summary ──────────────────────────────────────────────────────
+    # ── 11. Summary ──────────────────────────────────────────────────────
     print("\n" + "=" * 65)
     print("DONE")
     print(f"  Clean data : {clean_path}")
