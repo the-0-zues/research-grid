@@ -63,7 +63,7 @@ R_PHASE_ARC = 2.0      # phase-to-phase arc resistance (LL, LLG, 3PH)
 RFI_SIGMA = np.sqrt((0.006 / 3) ** 2 + (0.007 / 3) ** 2)  # ≈ 0.00307
 SM_SIGMA  = 0.005 / 3                                        # ≈ 0.001667
 
-DROPOUT_RATES = [0.05, 0.10, 0.15, 0.20, 0.25, 0.30, 0.35, 0.40, 0.45, 0.50]
+DROPOUT_RATE = 0.10    # 10% smart meter dropout — models AMI last-gasp failure
 
 MV_KV = 12470 / 1.7321 / 1000   # line-to-neutral kV for 12.47 kV system ≈ 7.199
 
@@ -550,23 +550,22 @@ def main():
     print("\n[9] Generating degraded datasets (ANSI noise + SM dropout)...")
     clean_df = pd.DataFrame(rows)
 
-    for dropout_rate in DROPOUT_RATES:
-        pct_label = f"{int(round(dropout_rate * 100)):02d}pct"
-        out_dir   = os.path.join(OUT_DIR, f"Degraded_Dropout_{pct_label}")
-        out_path  = os.path.join(out_dir, "results.csv")
-        os.makedirs(out_dir, exist_ok=True)
+    pct_label = f"{int(round(DROPOUT_RATE * 100)):02d}pct"
+    out_dir   = os.path.join(OUT_DIR, f"Degraded_Dropout_{pct_label}")
+    out_path  = os.path.join(out_dir, "results.csv")
+    os.makedirs(out_dir, exist_ok=True)
 
-        seed     = int(round(dropout_rate * 100)) * 1000
-        degraded = apply_noise_and_dropout(clean_df, rfi_cols, sm_cols, dropout_rate, seed)
-        degraded.to_csv(out_path, index=False)
-        print(f"    Dropout {pct_label}  →  {out_path}")
+    seed     = int(round(DROPOUT_RATE * 100)) * 1000
+    degraded = apply_noise_and_dropout(clean_df, rfi_cols, sm_cols, DROPOUT_RATE, seed)
+    degraded.to_csv(out_path, index=False)
+    print(f"    Dropout {pct_label}  →  {out_path}")
 
     # ── 10. Summary ──────────────────────────────────────────────────────
     print("\n" + "=" * 65)
     print("DONE")
-    print(f"  Clean data   : {clean_path}")
-    print(f"  Degraded (x{len(DROPOUT_RATES)}): {OUT_DIR}/Degraded_Dropout_*/results.csv")
-    print(f"  Total outputs: {1 + len(DROPOUT_RATES)} CSV files")
+    print(f"  Clean data : {clean_path}")
+    print(f"  Degraded   : {out_path}")
+    print(f"  Total outputs: 2 CSV files")
     print("=" * 65)
 
 
