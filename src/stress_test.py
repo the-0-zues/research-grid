@@ -17,6 +17,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from pathlib import Path
 from sklearn.metrics import accuracy_score
+from sklearn.model_selection import train_test_split
 
 # ---------------------------------------------------------------------------
 # Paths
@@ -31,11 +32,22 @@ FIGURES_DIR.mkdir(exist_ok=True)
 
 RFI_COLS = [f"RFI{i}" for i in range(1, 21)]
 
+# Must match train.py / train_augmented.py so the test set lines up exactly
+RANDOM_STATE = 42
+TEST_SIZE    = 0.20
+
 # ---------------------------------------------------------------------------
 # Load data and models
 # ---------------------------------------------------------------------------
 
 def load_all():
+    """
+    Load the full K-run dataset, then re-create the same stratified
+    train/test split used by train.py / train_augmented.py (same
+    random_state, test_size, and stratify column) and keep only the
+    held-out test rows. This avoids evaluating on rows the models were
+    trained on, which previously inflated accuracy to ~99%.
+    """
     files = sorted(glob.glob(KRUN_GLOB))
     print(f"Loading {len(files)} scenario files...")
     df = pd.concat([pd.read_csv(f) for f in files], ignore_index=True)
@@ -45,7 +57,17 @@ def load_all():
     X = df[feature_cols].values.astype(np.float32)
     y = df["zone"].astype(str).values
     print(f"  {len(df)} samples, {len(feature_cols)} features")
-    return df, X, y, feature_cols
+
+    idx = np.arange(len(df))
+    _, test_idx = train_test_split(
+        idx, test_size=TEST_SIZE, random_state=RANDOM_STATE, stratify=y
+    )
+    print(f"  Using held-out test set: {len(test_idx)} samples")
+
+    df_test = df.iloc[test_idx].reset_index(drop=True)
+    X_test  = X[test_idx]
+    y_test  = y[test_idx]
+    return df_test, X_test, y_test, feature_cols
 
 def load_models():
     with open(MODELS_DIR / "rf_model.pkl",  "rb") as f: rf  = pickle.load(f)
