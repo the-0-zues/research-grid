@@ -21,8 +21,8 @@ Impedance sources:
 
 Measurement noise (ANSI/IEEE standards, applied post-simulation):
   RFI: RSS of IEEE C57.13-2016 Class 0.6 CT (0.6%/3) and
-       ANSI C12.1-2022 Class 0.5 meter (0.7%/3)  → σ ≈ 0.307% per reading
-  SM:  ANSI C12.20 Class 0.5 (±0.5%)              → σ ≈ 0.167% per reading
+       ANSI C12.1-2022 Class 0.5 meter (0.7%/3)  -> σ ≈ 0.307% per reading
+  SM:  ANSI C12.20 Class 0.5 (±0.5%)              -> σ ≈ 0.167% per reading
   SM dropout: 10% (models AMI last-gasp reporting failure)
 
 Load variation (LoadShapes):
@@ -362,10 +362,10 @@ def apply_fault(fault):
     """
     Reconfigure and enable the appropriate fault slots for this event.
 
-    SLG  → 1 element (phase to ground)
-    LL   → 1 element (phase to phase)
-    LLG  → 3 elements (phase A to ground, phase B to ground, A to B arc)
-    3PH  → 3 elements (A-B arc, B-C arc, C-A arc — no ground)
+    SLG  -> 1 element (phase to ground)
+    LL   -> 1 element (phase to phase)
+    LLG  -> 3 elements (phase A to ground, phase B to ground, A to B arc)
+    3PH  -> 3 elements (A-B arc, B-C arc, C-A arc — no ground)
     """
     bus   = fault["fault_bus"]
     ftype = fault["fault_type"]
@@ -498,7 +498,7 @@ def apply_noise_and_dropout(df, rfi_cols, sm_cols, dropout_rate, seed):
     rng = np.random.default_rng(seed)
     out = df.copy()
 
-    # Convert measurement columns to float (empty strings → NaN for non-converged rows)
+    # Convert measurement columns to float (empty strings -> NaN for non-converged rows)
     rfi_vals = out[rfi_cols].apply(pd.to_numeric, errors="coerce").values.astype(float)
     sm_vals  = out[sm_cols].apply(pd.to_numeric, errors="coerce").values.astype(float)
 
@@ -581,7 +581,7 @@ def main():
     print("\n[8] Initialising reusable fault slots...")
     init_fault_slots(mv_buses[0])
     dss.Command("set controlmode=static")
-    dss.Command("set maxcontroler=100")
+    dss.Command("set maxcontroliter=100")
     dss.Command("Solve")
     print(f"    Base with DGs + monitors converged: {dss.Solution.Converged()}")
 
@@ -615,7 +615,7 @@ def main():
             # load level before the fault occurs.
             dss.Command(f"set loadmult={load_mult}")
             dss.Command("set controlmode=static")
-            dss.Command("set maxcontroler=100")
+            dss.Command("set maxcontroliter=100")
             dss.Command("Solve")
 
             # ── Record cap states (locked in during fault solve) ──────────
@@ -664,7 +664,7 @@ def main():
                       f"({100*(i+1)/len(faults):.0f}%)  "
                       f"converged={n_converged}  diverged={n_diverged}")
 
-    print(f"\n    Clean data saved  →  {clean_path}")
+    print(f"\n    Clean data saved  ->  {clean_path}")
     print(f"    Converged: {n_converged}  |  Diverged (excluded from noise step): {n_diverged}")
 
     # ── 10. Generate degraded dataset ────────────────────────────────────
@@ -679,7 +679,7 @@ def main():
     seed     = int(round(DROPOUT_RATE * 100)) * 1000
     degraded = apply_noise_and_dropout(clean_df, rfi_cols, sm_cols, DROPOUT_RATE, seed)
     degraded.to_csv(out_path, index=False)
-    print(f"    Dropout {pct_label}  →  {out_path}")
+    print(f"    Dropout {pct_label}  ->  {out_path}")
 
     # ── 11. Summary ──────────────────────────────────────────────────────
     print("\n" + "=" * 65)
