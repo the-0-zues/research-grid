@@ -1,7 +1,38 @@
 {
   "permissions": {
     "allow": [
-      "PowerShell(python \"C:\\\\EPRI_Ckt7_DER_Project\\\\der_fault_simulation.py\" 2>&1)"
+      "PowerShell(python \"C:\\\\EPRI_Ckt7_DER_Project\\\\der_fault_simulation.py\" 2>&1)",
+      "Bash(python -c ' *)",
+      "Bash(tasklist)",
+      "Bash(git add *)",
+      "Bash(git config *)",
+      "Bash(git commit -m 'Add Degraded_Datasets Dropout_10pct \\(10 k-runs x 25 scenarios\\) *)",
+      "Bash(git reset *)",
+      "Bash(git commit -m 'Add Degraded_Datasets Dropout_05pct + generation script *)",
+      "Bash(git push *)",
+      "Bash(git commit -m 'Add Degraded_Datasets Dropout_10pct *)",
+      "Bash(git commit -m 'Add Degraded_Datasets Dropout_15pct *)",
+      "Bash(git commit -m 'Add Degraded_Datasets Dropout_20pct *)",
+      "Bash(git commit -m 'Add Degraded_Datasets Dropout_25pct *)",
+      "Bash(git commit -m 'Add Degraded_Datasets Dropout_30pct *)",
+      "Bash(git commit -m 'Add Degraded_Datasets Dropout_35pct *)",
+      "Bash(git commit -m 'Add Degraded_Datasets Dropout_40pct *)",
+      "Bash(git commit -m 'Add Degraded_Datasets Dropout_45pct *)",
+      "Bash(git commit -m 'Add Degraded_Datasets Dropout_50pct *)",
+      "Bash(sort -t= -k2 -rn)",
+      "Bash(awk -F',' '{print $2, $3}' \"C:/EPRI_Ckt7_DER_Project/02_Base_Allocated/BusCoords_ckt7.dss\")",
+      "Bash(python3 -c ' *)",
+      "Bash(ls /c/Python*)",
+      "Read(//c/Users/Lenovo/AppData/Local/Programs/Python//**)",
+      "Bash(/c/Users/Lenovo/AppData/Local/Programs/Python/Python313/python -c ' *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git pull *)",
+      "Bash(git stash *)",
+      "Bash(/c/Users/Lenovo/AppData/Local/Programs/Python/Python313/python fault_simulation_2000.py)",
+      "Bash(/c/Users/Lenovo/AppData/Local/Programs/Python/Python313/python -)",
+      "mcp__visualize__read_me",
+      "mcp__visualize__show_widget",
+      "Bash(/c/Users/Lenovo/AppData/Local/Programs/Python/Python313/python normal_operations_simulation.py)"
     ]
   }
 }
