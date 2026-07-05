@@ -423,14 +423,15 @@ def clear_faults():
 # ═══════════════════════════════════════════════════════════════════════════
 
 def read_rfi_currents():
-    """Read maximum phase current magnitude (A) from each of the 20 RFI lines."""
+    """Read phase A, B, C current magnitudes (A) from each of the 20 RFI lines."""
     results = {}
     for rfi_label, line_name in RFI_LINES:
         dss.Circuit.SetActiveElement(f"Line.{line_name}")
         cmag = dss.CktElement.CurrentsMagAng()
         n    = dss.CktElement.NumPhases()
-        mags = [cmag[2 * i] for i in range(n)]
-        results[rfi_label] = max(mags) if mags else 0.0
+        results[f"{rfi_label}_A"] = cmag[0] if n >= 1 else 0.0
+        results[f"{rfi_label}_B"] = cmag[2] if n >= 2 else 0.0
+        results[f"{rfi_label}_C"] = cmag[4] if n >= 3 else 0.0
     return results
 
 
@@ -586,7 +587,7 @@ def main():
     print(f"    Base with DGs + monitors converged: {dss.Solution.Converged()}")
 
     # ── 9. Simulation loop ───────────────────────────────────────────────
-    rfi_cols   = [r for r, _ in RFI_LINES]
+    rfi_cols   = [f"{r}_{ph}" for r, _ in RFI_LINES for ph in ("A", "B", "C")]
     sm_cols    = [sm[0] for sm in sm_list]
     fieldnames = META_COLS + rfi_cols + sm_cols
     rng_load   = random.Random(FAULT_SEED + 1)   # separate RNG for load sampling
