@@ -1,0 +1,3 @@
+# intermediate simulation outputs (regenerable from the dgsweep_*.py scripts)
+**/raw/
+**/lateral_currents.csv
