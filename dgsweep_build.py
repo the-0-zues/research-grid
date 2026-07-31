@@ -115,8 +115,11 @@ if __name__ == "__main__":
     for n in (0, 1, 2, 3):
         for branch in ("Faulty", "Clean"):
             p = prep(branch, n)
+            # Faulty: full dropout sweep. Clean (normal ops): only the realistic
+            # 10% meter dropout; higher rates are unphysical with no outage.
+            levels = DROP[n] if branch == "Faulty" else [10]
             ncols = 0
-            for dpct in DROP[n]:
+            for dpct in levels:
                 ncols = write(n, branch, dpct, p)
-            print(f"{n}DG {branch}: {len(p[0])} rows x {ncols} cols  -> {len(DROP[n])} dropout levels", flush=True)
+            print(f"{n}DG {branch}: {len(p[0])} rows x {ncols} cols  -> {len(levels)} dropout level(s)", flush=True)
     print("\nDONE")
